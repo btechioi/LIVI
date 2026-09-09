@@ -78,10 +78,21 @@ pub fn files() -> Vec<File> {
     files
 }
 
-/// The tool's version and a short digest of everything it installs, so a dongle that carries the
-/// same string carries the same files.
+/// LIVI's release, passed in by CI. A build from a working tree keeps the crate's version.
+pub fn release() -> &'static str {
+    option_env!("LIVI_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"))
+}
+
+/// The version and a short digest of everything it installs, so a dongle that carries the same
+/// string carries the same files.
 pub fn version(digest: &str) -> String {
-    format!("{} {}\n", env!("CARGO_PKG_VERSION"), &md5_hex(digest.as_bytes())[..8])
+    format!("{} {}\n", release(), &md5_hex(digest.as_bytes())[..8])
+}
+
+/// The release and the digest a version line is made of.
+pub fn parts(line: &str) -> (&str, &str) {
+    let line = line.trim();
+    line.split_once(' ').unwrap_or((line, ""))
 }
 
 /// What `files()` writes to `VERSION_FILE`.
@@ -100,6 +111,12 @@ pub fn md5_hex(data: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_version_line_splits_into_release_and_digest() {
+        assert_eq!(super::parts("9.0.0 3f2a1b9c\n"), ("9.0.0", "3f2a1b9c"));
+        assert_eq!(super::parts("9.0.0"), ("9.0.0", ""));
+    }
+
     use super::*;
 
     #[test]

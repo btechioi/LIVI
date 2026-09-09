@@ -43,3 +43,9 @@ alternate while it writes, do not unplug until they stop.
 If the dongle does not come up on USB or Wi-Fi, wait 30 seconds for it to roll back and reboot,
 then replug if it stays quiet. Logs live at <http://10.10.10.1/>: `/tmp/livi-link.log`,
 `/tmp/l2fwd-watch.log` and `/tmp/flash.log`.
+
+## Firmware
+
+| Version | State |
+| --- | --- |
+| 0.1.0 | dev |

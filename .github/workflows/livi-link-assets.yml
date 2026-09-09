@@ -130,7 +130,9 @@ jobs:
 
       - name: Build
         working-directory: native/livi-helperd
-        run: cargo build --release -p livi-link-provision-cli
+        run: |
+          LIVI_VERSION="$(node -p "require('../../package.json').version")" \
+            cargo build --release -p livi-link-provision-cli
 
       - name: Upload artifact
         uses: actions/upload-artifact@v6

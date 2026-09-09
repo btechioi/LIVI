@@ -1,14 +1,6 @@
-//! The access point, driven from the host over TCP. It reads the vendor config as its base and
-//! writes what the host asks for into tmpfs, so a reboot always returns to the fallback AP.
-//!
-//! Settings are collected per connection and only take effect on `apply`, which puts the previous
-//! config back when hostapd refuses the new one. The AP is never left down after a failed change.
-//!
-//! Every apply starts from the base config, so it says the whole state rather than a change to it.
-//! A setting the host leaves out goes back to what the fallback AP uses. `save` then makes the
-//! whole state the one the dongle boots with, so name, band, channel, country and passphrase
-//! belong to the dongle rather than to a session. Only the boot script's recovery puts the default
-//! name back, when neither the USB link nor the AP came up.
+//! The access point, driven from the host over TCP. Settings are collected per connection and
+//! take effect on `apply`, which puts the previous config back when hostapd refuses the new one.
+//! `save` then writes them into the config the dongle boots with.
 
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
@@ -356,9 +348,8 @@ fn status(ap: &Ap) -> String {
     out
 }
 
-/// Starts hostapd and waits until the radio reports it is up. It runs as a child of this daemon
-/// rather than detached, so its death is noticed at once instead of guessed from a process list.
-/// No `-B` either, because daemonising closes the log before the interesting part.
+/// Starts hostapd and waits until the radio reports it is up. As a child, so its death is noticed,
+/// and without `-B`, which would close the log before the interesting line.
 fn start(ap: &mut Ap, config: &str) -> Result<(), String> {
     let _ = std::fs::remove_file(LOG);
     let log = std::fs::File::create(LOG).map_err(|e| format!("{LOG}: {e}"))?;

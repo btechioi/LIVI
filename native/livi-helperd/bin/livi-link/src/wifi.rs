@@ -147,11 +147,8 @@ struct Radio {
     channels: Vec<(u32, String)>,
 }
 
-/// Every radio the kernel knows. Their lists differ, so they are never merged.
-///
-/// The dump asks to be split: without it the kernel has to fit a whole radio into one message and
-/// simply stops when it does not, which loses radios and bands without saying so. Split answers
-/// arrive in several messages per radio, each naming the radio it belongs to.
+/// Every radio the kernel knows, never merged, because their lists differ. The dump asks to be
+/// split: unsplit it must fit a radio into one message and silently stops when it does not.
 #[cfg(target_os = "linux")]
 fn radios(fd: &OwnedFd, family: u16) -> Result<Vec<Radio>, String> {
     let split = attr(ATTR_SPLIT_WIPHY_DUMP, &[]);

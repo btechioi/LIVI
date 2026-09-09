@@ -10,9 +10,24 @@ use livi_link_provision::payload::parts;
 use livi_link_provision::shell::{self, DEFAULT_HOST, Shell};
 use livi_link_provision::{Plan, Report, Status, apply, mtd, plan, verify};
 
+const LEGACY_HOST: &str = "192.168.50.2";
+
+/// The address to talk to. What the caller names wins, then the current one, then the old one.
+fn pick_host() -> String {
+    if let Ok(host) = std::env::var("LIVI_LINK_HOST") {
+        return host;
+    }
+    for host in [DEFAULT_HOST, LEGACY_HOST] {
+        if Shell::new(host).port_open(shell::TELNET_PORT) {
+            return host.to_string();
+        }
+    }
+    DEFAULT_HOST.to_string()
+}
+
 fn main() -> std::process::ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let host = std::env::var("LIVI_LINK_HOST").unwrap_or_else(|_| DEFAULT_HOST.to_string());
+    let host = pick_host();
     let Some(command) = args.first().map(String::as_str) else {
         return menu(&Shell::new(&host));
     };
@@ -82,9 +97,12 @@ fn main() -> std::process::ExitCode {
 /// for scripting.
 fn menu(sh: &Shell) -> std::process::ExitCode {
     loop {
-        let fresh = is_stock(sh).unwrap_or(true);
         println!("\nLIVI Link  ({})", describe(sh));
-        println!("  1  {} LIVI Link", if fresh { "install" } else { "reinstall" });
+        // An up to date dongle offers no install, only the deliberate way to write it again.
+        match action(sh) {
+            Some(what) => println!("  1  {what} LIVI Link"),
+            None => println!("  r  reinstall LIVI Link"),
+        }
         println!("  q  quit");
         print!("> ");
         let _ = std::io::Write::flush(&mut std::io::stdout());
@@ -94,7 +112,11 @@ fn menu(sh: &Shell) -> std::process::ExitCode {
             return std::process::ExitCode::SUCCESS;
         }
         let outcome: Result<(), String> = match line.trim() {
-            "1" => match install(sh) {
+            "1" if action(sh).is_some() => match install(sh) {
+                Ok(()) => return std::process::ExitCode::SUCCESS,
+                Err(e) => Err(e),
+            },
+            "r" if action(sh).is_none() => match install(sh) {
                 Ok(()) => return std::process::ExitCode::SUCCESS,
                 Err(e) => Err(e),
             },
@@ -128,26 +150,45 @@ fn describe(sh: &Shell) -> String {
     format!("{model} {firmware}, {}", state(sh))
 }
 
-/// Nothing installed, the same version as this tool, or a different one.
-fn state(sh: &Shell) -> String {
-    let installed = sh
+/// Whether this tool would change the dongle's firmware, and what that would be called.
+fn action(sh: &Shell) -> Option<&'static str> {
+    use livi_link_provision::payload;
+    if is_stock(sh).unwrap_or(true) {
+        return Some("install");
+    }
+    let installed = installed_version(sh)?;
+    let ours = payload::current_version();
+    (payload::parts(&installed).1 != payload::parts(&ours).1).then_some("update")
+}
+
+/// The version on the dongle, if it carries one.
+fn installed_version(sh: &Shell) -> Option<String> {
+    let out = sh
         .sh(&format!("cat {} 2>/dev/null", livi_link_provision::payload::VERSION_FILE))
         .unwrap_or_default()
         .trim()
         .to_string();
-    if installed.is_empty() {
+    (!out.is_empty()).then_some(out)
+}
+
+/// What the dongle carries, and what this tool would put there instead.
+fn state(sh: &Shell) -> String {
+    use livi_link_provision::payload;
+    let Some(installed) = installed_version(sh) else {
         return match is_stock(sh) {
             Ok(true) => "not installed yet".into(),
             Ok(false) => "LIVI Link installed, version unknown".into(),
             Err(_) => "state unknown".into(),
         };
+    };
+    let ours = payload::current_version();
+    let (theirs, their_files) = payload::parts(&installed);
+    let (mine, my_files) = payload::parts(&ours);
+    // Both parts, always: the digest says whether they differ, the number says what it is called.
+    if their_files == my_files {
+        return format!("LIVI Link {theirs} {their_files}, up to date");
     }
-    let ours = livi_link_provision::payload::current_version().trim().to_string();
-    if installed == ours {
-        format!("LIVI Link {installed}, up to date")
-    } else {
-        format!("LIVI Link {installed}, this tool has {ours}")
-    }
+    format!("LIVI Link {theirs} {their_files}, this tool brings {mine} {my_files}")
 }
 
 /// The whole job in one go: a shell if the dongle has none, then the backup, then the install.

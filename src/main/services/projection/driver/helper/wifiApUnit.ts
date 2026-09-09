@@ -2,6 +2,7 @@ import { execFileSync, spawn } from 'node:child_process'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import { join } from 'node:path'
+import { DONGLE_AP } from '@main/services/link/dongleAp'
 import type { Config } from '@shared/types/Config'
 import { app, type BrowserWindow, dialog } from 'electron'
 
@@ -98,12 +99,18 @@ function installPrivileged(): Promise<void> {
 function sudo(args: string[]): Promise<boolean> {
   return new Promise((resolve) => {
     const proc = spawn('sudo', ['-n', ...args], { stdio: 'ignore' })
-    proc.on('close', (code) => resolve(code === 0))
-    proc.on('error', () => resolve(false))
+    const timer = setTimeout(() => proc.kill('SIGKILL'), 12_000)
+    const done = (ok: boolean): void => {
+      clearTimeout(timer)
+      resolve(ok)
+    }
+    proc.on('close', (code) => done(code === 0))
+    proc.on('error', () => done(false))
   })
 }
 
 function apWanted(config: Config): boolean {
+  if (config.wifiInterface === DONGLE_AP) return false
   return config.wifiDedicatedInterface || config.wirelessCpEnabled || config.wirelessAaEnabled
 }
 
@@ -116,31 +123,16 @@ function cmdOk(cmd: string, args: string[]): Promise<boolean> {
 }
 
 // Undo a takeover and return the interface to NetworkManager.
-async function releaseInterface(config: Config): Promise<void> {
+async function releaseInterface(): Promise<void> {
   const taken =
     existsSync(NM_UNMANAGED_CONF) ||
     (await cmdOk('systemctl', ['is-active', '--quiet', SERVICE])) ||
     (await cmdOk('systemctl', ['is-enabled', '--quiet', SERVICE]))
   if (!taken) return
-  const iface = config.wifiInterface || 'wlan0'
-  const script = [
-    `systemctl disable --now ${SERVICE} || true`,
-    `rm -f ${NM_UNMANAGED_CONF}`,
-    'nmcli general reload',
-    `nmcli device set ${iface} managed yes`,
-    `nmcli -w 8 device connect ${iface} || true`
-  ].join('\n')
-  // Bounded: a stuck nmcli/pkexec must never wedge the release.
-  await new Promise<void>((resolve) => {
-    const proc = spawn('pkexec', ['bash', '-c', script], { stdio: 'ignore' })
-    const timer = setTimeout(() => proc.kill('SIGKILL'), 12_000)
-    const done = (): void => {
-      clearTimeout(timer)
-      resolve()
-    }
-    proc.on('close', done)
-    proc.on('error', done)
-  })
+  const sc = systemctlPath()
+  await sudo([sc, 'stop', SERVICE])
+  await sudo([sc, 'disable', SERVICE])
+  await sudo([helperPath(), '--wifi-ap-teardown'])
 }
 
 let installing = false
@@ -149,7 +141,7 @@ let installing = false
 export async function reconcileWifiAp(config: Config, window?: BrowserWindow): Promise<void> {
   if (process.platform !== 'linux') return
   if (!apWanted(config)) {
-    await releaseInterface(config)
+    await releaseInterface()
     return
   }
 

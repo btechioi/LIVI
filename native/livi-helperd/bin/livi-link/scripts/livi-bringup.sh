@@ -6,6 +6,8 @@
 
 PATH=/bin:/sbin:/usr/bin:/usr/sbin:/tmp/bin; export PATH
 log(){ echo "[livi] $*" > /dev/console 2>/dev/null; echo "[livi] $*"; }
+# The name the AP falls back to when this boot gave up, so there is a known one to look for.
+AP_DEFAULT='LIVI Link'
 
 rm -f /dev/random && ln -s /dev/urandom /dev/random
 mkdir -p /tmp/bin
@@ -21,6 +23,12 @@ busybox telnetd -l /bin/sh -p 2323
 ( sleep 30
   [ -e /tmp/livi_ok ] && exit 0
   [ -e /script/start_main_service.sh.orig ] || exit 0
+  # The AP carries whatever name was last saved, which is no help to someone looking for a dongle
+  # that just gave up. Put the default back before handing over.
+  if [ -f /etc/hostapd.conf ]; then
+    { grep -v '^ssid=' /etc/hostapd.conf; echo "ssid=$AP_DEFAULT"; } > /etc/hostapd.conf.new \
+      && mv /etc/hostapd.conf.new /etc/hostapd.conf
+  fi
   cp /script/start_main_service.sh.orig /script/start_main_service.sh
   sync; reboot -f
 ) &
@@ -54,23 +62,23 @@ if [ -e "$A/enable" ]; then
   echo 1 > "$A/enable"
   sleep 1
   [ -e /sys/class/net/ncm0 ] && ifconfig ncm0 hw ether c2:8e:30:53:48:01 2>/dev/null
-  ifconfig ncm0 192.168.50.2 netmask 255.255.255.0 mtu 1500 up
+  ifconfig ncm0 10.10.10.1 netmask 255.255.255.0 mtu 1500 up
   cat > /tmp/udhcpd_ncm.conf <<CFG
-start 192.168.50.100
-end 192.168.50.150
+start 10.10.10.100
+end 10.10.10.200
 interface ncm0
 opt subnet 255.255.255.0
 opt lease 86400
 lease_file /tmp/udhcpd_ncm.leases
 pidfile /tmp/udhcpd_ncm.pid
-max_leases 20
+max_leases 100
 CFG
   touch /tmp/udhcpd_ncm.leases
   busybox udhcpd -f /tmp/udhcpd_ncm.conf >/tmp/udhcpd_ncm.log 2>&1 &
-  log "ncm0 192.168.50.2 + udhcpd; state=$(cat $A/state)"
+  log "ncm0 10.10.10.1 + udhcpd; state=$(cat $A/state)"
 fi
 
-# --- LIVI Link relay stack: seedrng, mfid (:5000), carkit_tunnel (:5002), l2fwd bridge ---
+# --- LIVI Link relay stack: seedrng, mfid (:5000), wifid (:5001), usbproxy (:5003), bridge ---
 [ -f /script/livi/livi-link.sh ] && { sh /script/livi/livi-link.sh; log "LIVI Link stack started"; }
 
 # --- WiFi (IW416, sdioCardID 0x9159): mlan + moal ---
@@ -80,12 +88,13 @@ insmod /tmp/mlan.ko 2>/dev/null
 insmod /tmp/moal.ko mod_para=nxp/wifi_mod_para.conf 2>/dev/null
 i=0; while [ ! -e /sys/class/net/wlan0 ] && [ $i -lt 60 ]; do sleep 0.1; i=$((i+1)); done
 
-# --- WiFi AP (fallback access + phone AP later) ---
-ifconfig wlan0 192.168.43.1 netmask 255.255.255.0 up 2>/dev/null
+# --- WiFi AP ---
+# No address of its own: l2fwd-watch bridges it onto ncm0, so the AP and the USB link are one
+# segment with one address and one DHCP. Two addresses would deliver every frame twice.
+ifconfig wlan0 0.0.0.0 up 2>/dev/null
 hostapd /etc/hostapd.conf -B 2>/dev/null
-udhcpd /etc/udhcpd.conf 2>/dev/null
 
-if [ -e /sys/class/net/ncm0 ] || { ifconfig wlan0 2>/dev/null | grep -q 192.168.43.1 && ps | grep -v grep | grep -q hostapd; }; then
+if [ -e /sys/class/net/ncm0 ] || ps | grep -v grep | grep -q hostapd; then
   touch /tmp/livi_ok
   kill $WATCHDOG 2>/dev/null
   log "access up (ncm0 and/or AP), watchdog stood down"

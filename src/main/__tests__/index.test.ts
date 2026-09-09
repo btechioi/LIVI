@@ -77,6 +77,10 @@ vi.mock('../services/usb/udevRule', () => ({
 vi.mock('@main/services/projection/driver/helper/helperSudoers', () => ({
   checkAndInstallHelperSudoers: vi.fn(() => Promise.resolve())
 }))
+vi.mock('@main/services/link/dongleAp', () => ({
+  DONGLE_AP: 'livi-link',
+  reconcileDongleAp: vi.fn(() => Promise.resolve())
+}))
 vi.mock('@main/services/projection/driver/helper/wifiApUnit', () => ({
   reconcileWifiAp: vi.fn(() => Promise.resolve()),
   releaseWifiApForQuit: vi.fn(() => Promise.resolve())

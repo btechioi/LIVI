@@ -12,12 +12,17 @@ mod mfid;
 #[cfg(target_os = "linux")]
 mod seedrng;
 mod usbproxy;
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+mod wifi;
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+mod wifid;
 
 use std::path::Path;
 use std::process::ExitCode;
 
 /// The names the stack runs under, and the symlinks `livi-link.sh` creates for them.
-const TOOLS: [&str; 5] = ["seedrng", "mfid", "livi-usbproxy", "l2fwd", "mdnsd"];
+const TOOLS: [&str; 6] = ["seedrng", "mfid", "livi-usbproxy", "l2fwd", "mdnsd", "wifid"];
+const COMMANDS: [&str; 1] = ["wifi-channels"];
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().collect();
@@ -45,11 +50,15 @@ fn main() -> ExitCode {
         "l2fwd" => l2fwd::run(&rest),
         #[cfg(target_os = "linux")]
         "mdnsd" => mdnsd::run(&rest),
+        #[cfg(target_os = "linux")]
+        "wifid" => wifid::run(),
+        #[cfg(target_os = "linux")]
+        "wifi-channels" => wifi::run(),
         other => {
-            if !other.is_empty() && TOOLS.contains(&other) {
+            if !other.is_empty() && (TOOLS.contains(&other) || COMMANDS.contains(&other)) {
                 eprintln!("livi-link: {other} runs on the dongle (linux) only");
             } else {
-                eprintln!("usage: livi-link <{}> [args]", TOOLS.join("|"));
+                eprintln!("usage: livi-link <{}|{}> [args]", TOOLS.join("|"), COMMANDS.join("|"));
             }
             ExitCode::from(2)
         }

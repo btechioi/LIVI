@@ -1,11 +1,12 @@
 // Provisions a CarlinKit dongle as LIVI Link without a UI; the app drives the same crate.
-// Host: $LIVI_LINK_HOST (default 192.168.50.2). Assets: --assets or $LIVI_LINK_ASSETS.
+// Host: $LIVI_LINK_HOST (default 10.10.10.1). The stack it installs is baked into this binary.
 
 mod bootstrap;
 
 use std::path::PathBuf;
 use std::time::Duration;
 
+use livi_link_provision::payload::parts;
 use livi_link_provision::shell::{self, DEFAULT_HOST, Shell};
 use livi_link_provision::{Plan, Report, Status, apply, mtd, plan, verify};
 
@@ -173,6 +174,9 @@ fn install(sh: &Shell) -> Result<(), String> {
         println!("== bootstrap removed again");
     }
 
+    // From here on the dongle is being written to and must not be unplugged, so it says so.
+    let blinking = blink(sh);
+
     // Only while the dongle is untouched. A backup of an already installed one is worthless and
     // would sit next to the real one, inviting a restore of the wrong image.
     if is_stock(sh)? {
@@ -185,6 +189,7 @@ fn install(sh: &Shell) -> Result<(), String> {
     // Installed over whichever way in we had, but afterwards the dongle is LIVI Link and answers
     // over USB, so the restart and the check happen there.
     apply(sh, false, &report)?;
+    drop(blinking);
     report("rebooting");
     sh.sh("sync; (sleep 1; reboot) >/dev/null 2>&1 &")?;
     std::thread::sleep(Duration::from_secs(5));
@@ -193,10 +198,43 @@ fn install(sh: &Shell) -> Result<(), String> {
     let outcome = verify(&link)?;
     print_report(&outcome);
     if outcome.ok() {
-        println!("\n== done, the dongle is LIVI Link now and safe to unplug");
+        let now = installed_version(&link).unwrap_or_else(|| "?".into());
+        println!("\n== done, the dongle runs LIVI Link {} and is safe to unplug", parts(&now).0);
         Ok(())
     } else {
         Err("the dongle did not come back as expected".into())
+    }
+}
+
+/// Alternates the two LEDs, the signal the vendor's updater gives while it writes. It runs
+/// detached on the dongle and is stopped again however the install ends.
+struct Blink<'a>(&'a Shell);
+
+/// The loop itself. One line, because the shell on the dongle reads commands by line.
+const BLINK_LOOP: &str = "echo $$ > /tmp/livi-blink.pid; \
+                for g in 2 9; do \
+                  [ -e /sys/class/gpio/gpio$g ] || echo $g > /sys/class/gpio/export; \
+                  echo out > /sys/class/gpio/gpio$g/direction; \
+                done; \
+                while :; do \
+                  echo 0 > /sys/class/gpio/gpio2/value; echo 1 > /sys/class/gpio/gpio9/value; sleep 0.25; \
+                  echo 1 > /sys/class/gpio/gpio2/value; echo 0 > /sys/class/gpio/gpio9/value; sleep 0.25; \
+                done";
+
+fn blink(sh: &Shell) -> Blink<'_> {
+    let _ = sh.sh(&format!("setsid sh -c '{BLINK_LOOP}' </dev/null >/dev/null 2>&1 &"));
+    Blink(sh)
+}
+
+impl Drop for Blink<'_> {
+    fn drop(&mut self) {
+        // By its pid, because a pattern would match the shell that does the killing. Then back to
+        // the steady red of normal operation.
+        let _ = self.0.sh(
+            "kill $(cat /tmp/livi-blink.pid 2>/dev/null) 2>/dev/null; rm -f /tmp/livi-blink.pid; \
+             echo 1 > /sys/class/gpio/gpio9/value 2>/dev/null; \
+             echo 0 > /sys/class/gpio/gpio2/value 2>/dev/null",
+        );
     }
 }
 
@@ -288,4 +326,14 @@ fn print_report(r: &Report) {
 
 fn kib(v: Option<u64>) -> String {
     v.map(|k| format!("{k}K")).unwrap_or_else(|| "unknown".into())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_blink_loop_stays_on_one_line() {
+        assert!(!super::BLINK_LOOP.contains('\n'));
+        assert!(!super::BLINK_LOOP.contains('\''));
+        assert!(super::BLINK_LOOP.contains("gpio2/value"));
+    }
 }

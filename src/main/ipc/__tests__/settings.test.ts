@@ -30,6 +30,10 @@ vi.mock('@main/app/hostOutput', () => ({
   listHostOutputModes: vi.fn(() => ['1024x600', '800x480'])
 }))
 
+const { dongleApPresent } = vi.hoisted(() => ({ dongleApPresent: vi.fn(async () => false) }))
+
+vi.mock('@main/services/link/dongleAp', () => ({ DONGLE_AP: 'livi-link', dongleApPresent }))
+
 vi.mock('@main/app/wifiOptions', () => ({
   listBtAdapters: vi.fn(() => ['hci0']),
   listWifiChannels: vi.fn(() => [36, 40]),
@@ -234,8 +238,18 @@ describe('registerSettingsIpc', () => {
     expect(getHandler<() => number[]>('app:listWifiChannels')()).toEqual([36, 40])
     expect(listWifiChannels).toHaveBeenCalledWith('5ghz')
     expect(getHandler<() => string[]>('app:listWifiCountryCodes')()).toEqual(['AT', 'DE'])
-    expect(getHandler<() => string[]>('app:listWifiInterfaces')()).toEqual(['wlan0'])
+    expect(await getHandler<() => Promise<string[]>>('app:listWifiInterfaces')()).toEqual(['wlan0'])
     expect(getHandler<() => string[]>('app:listBtAdapters')()).toEqual(['hci0'])
+  })
+
+  test('the wifi interface list offers the dongle once it answers', async () => {
+    dongleApPresent.mockResolvedValueOnce(true)
+    registerSettingsIpc({ config: {} } as never)
+
+    expect(await getHandler<() => Promise<string[]>>('app:listWifiInterfaces')()).toEqual([
+      'wlan0',
+      'livi-link'
+    ])
   })
 
   test('app:getLatestRelease pulls the nightly feed and derives version, commit and run', async () => {

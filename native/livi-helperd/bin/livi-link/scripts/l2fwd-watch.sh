@@ -1,5 +1,7 @@
 #!/bin/sh
-# Keeps l2fwd bridging the iPhone's CarPlay network function to ncm0 (the host).
+# Keeps l2fwd bridging ncm0 (the host) to whichever side carries a phone: the AP while nothing is
+# on the OTG port, and the iPhone's CarPlay network function while there is. One bridge at a time,
+# because running both would put every wired frame out over the air as well.
 #
 # Interface selection is not a guess: the iAP2 identification announces
 # car_play_interface_number 3, and a working session on a Linux host (reference capture
@@ -71,15 +73,17 @@ while true; do
     fi
   fi
 
-  if [ -n "$SEL" ]; then
-    IDX=$(cat /sys/class/net/$SEL/ifindex 2>/dev/null)
+  # A phone on the OTG port takes the bridge, otherwise it belongs to the AP.
+  PARTNER=${SEL:-wlan0}
+  IDX=$(cat /sys/class/net/$PARTNER/ifindex 2>/dev/null)
+  if [ -n "$IDX" ]; then
     # l2fwd binds its AF_PACKET sockets by ifindex, and a re-bind gives the netdev a new one,
     # so key the restart on name AND index.
-    if [ "$SEL:$IDX" != "$LAST" ] || ! ps | grep -v grep | grep -q "[l]2fwd $SEL"; then
+    if [ "$PARTNER:$IDX" != "$LAST" ] || ! ps | grep -v grep | grep -q "[l]2fwd $PARTNER"; then
       pkill -f "$RUN/l2fwd" 2>/dev/null; sleep 0.3
-      setsid "$RUN/l2fwd" "$SEL" ncm0 >/tmp/l2fwd.log 2>&1 &
-      LAST="$SEL:$IDX"
-      echo "$(date +%T) l2fwd on $SEL($IDX) carrier=$(cat /sys/class/net/$SEL/carrier 2>/dev/null)" >> /tmp/l2fwd-watch.log
+      setsid "$RUN/l2fwd" "$PARTNER" ncm0 >/tmp/l2fwd.log 2>&1 &
+      LAST="$PARTNER:$IDX"
+      echo "$(date +%T) l2fwd on $PARTNER($IDX) carrier=$(cat /sys/class/net/$PARTNER/carrier 2>/dev/null)" >> /tmp/l2fwd-watch.log
     fi
   fi
   sleep 1

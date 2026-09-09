@@ -20,7 +20,7 @@ use payload::{
 use shell::{PUSH_PORT, Shell};
 
 /// The dongle's fallback access point, the way back in when the USB link is gone.
-const AP_NAME: &str = "LIVI (LL)";
+const AP_NAME: &str = "LIVI Link";
 /// Headroom kept free on the rootfs after the stack is installed.
 const SPACE_MARGIN_K: u64 = 256;
 /// How long the dongle may take to come back after a reboot.
@@ -258,8 +258,8 @@ fn stock_backup(sh: &Shell) -> Result<Backup, String> {
     }
 }
 
-/// Names the fallback AP. It only exists to reach a dongle whose USB link is gone, so it is not
-/// worth configuring; the vendor config otherwise keeps a name from the dongle's earlier life.
+/// Names the fallback AP, which is the one a dongle boots with. The host renames it to the car's
+/// name once it takes the AP over, so this name showing up means nothing is driving the dongle.
 fn set_ap_name(sh: &Shell) -> Result<bool, String> {
     // Some dongles have no Wi-Fi at all, and then there is no config to name anything in.
     if sh.sh("[ -f /etc/hostapd.conf ] && echo yes || echo no")?.trim() != "yes" {

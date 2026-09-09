@@ -30,8 +30,8 @@
   sleep 2
 
   [ -e /sys/class/net/ncm0 ] && ifconfig ncm0 hw ether c2:8e:30:53:48:01
-  ifconfig ncm0 192.168.50.2 netmask 255.255.255.0 mtu 1500 up
-  printf 'start 192.168.50.100\nend 192.168.50.150\ninterface ncm0\nopt subnet 255.255.255.0\nopt lease 86400\nlease_file /tmp/livi-udhcpd.leases\npidfile /tmp/livi-udhcpd.pid\nmax_leases 20\n' > /tmp/livi-udhcpd.conf
+  ifconfig ncm0 10.10.10.1 netmask 255.255.255.0 mtu 1500 up
+  printf 'start 10.10.10.100\nend 10.10.10.200\ninterface ncm0\nopt subnet 255.255.255.0\nopt lease 86400\nlease_file /tmp/livi-udhcpd.leases\npidfile /tmp/livi-udhcpd.pid\nmax_leases 20\n' > /tmp/livi-udhcpd.conf
   touch /tmp/livi-udhcpd.leases
   busybox udhcpd /tmp/livi-udhcpd.conf
   busybox telnetd -l /bin/sh -p 2323

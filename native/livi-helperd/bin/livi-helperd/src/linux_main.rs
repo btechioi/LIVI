@@ -78,8 +78,9 @@ pub fn run_wifi_ap() -> ExitCode {
 }
 
 pub fn run_wifi_ap_teardown() -> ExitCode {
-    let dc = DeviceConfig::load();
-    let iface = dc.string("wifiInterface", "LIVI_WIFI_IFACE", "wlan0");
+    let iface = livi_runtime::wifi_ap::unmanaged_iface().unwrap_or_else(|| {
+        DeviceConfig::load().string("wifiInterface", "LIVI_WIFI_IFACE", "wlan0")
+    });
     livi_runtime::wifi_ap::teardown(&iface);
     ExitCode::SUCCESS
 }

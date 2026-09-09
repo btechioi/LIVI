@@ -23,6 +23,7 @@ import {
 import { ensureWireplumberBtRoles } from '@main/services/audio/wireplumberBtRoles'
 import { customProxy } from '@main/services/custom/CustomProxy'
 import { checkAndInstallGvfsGuard, startPhoneSuppression } from '@main/services/gvfsPhoneGuard'
+import { reconcileDongleAp } from '@main/services/link/dongleAp'
 import { checkMissingPackages } from '@main/services/packageCheck'
 import { checkAndInstallHelperSudoers } from '@main/services/projection/driver/helper/helperSudoers'
 import { reconcileWifiAp } from '@main/services/projection/driver/helper/wifiApUnit'
@@ -88,7 +89,9 @@ app.whenReady().then(async () => {
   configEvents.on('changed', (next: Config) => {
     void customProxy.start(next.customUrl)
     void reconcileWifiAp(next)
+    void reconcileDongleAp(next)
   })
+  void reconcileDongleAp(runtimeState.config)
 
   const carBridge = new CarBridgeService(runtimeState.config.language)
   carBridge.start()

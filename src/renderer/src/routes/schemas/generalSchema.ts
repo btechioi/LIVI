@@ -39,7 +39,7 @@ async function loadWifiCountryCodes(): Promise<SelectOption[]> {
 async function loadWifiInterfaces(): Promise<SelectOption[]> {
   const list = await window.app?.listWifiInterfaces?.()
   if (!Array.isArray(list)) return []
-  return list.map((i) => ({ value: i, label: i }))
+  return list.map((i) => ({ value: i, label: i === 'livi-link' ? 'LIVI Link' : i }))
 }
 
 async function loadBtAdapters(): Promise<SelectOption[]> {

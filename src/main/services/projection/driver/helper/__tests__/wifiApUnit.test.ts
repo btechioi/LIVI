@@ -232,18 +232,20 @@ describe('reconcileWifiAp — not wanted', () => {
 
   test('returns the interface when the unmanaged conf is present', async () => {
     mockedExists.mockReturnValue(true)
+    autoClose(0)
     await reconcileWifiAp(cfg())
-    const s = pkexecScript()
-    expect(s).toContain('systemctl disable --now livi-wifi-ap.service')
-    expect(s).toContain('rm -f /etc/NetworkManager/conf.d/99-livi-ap-unmanaged.conf')
-    expect(s).toContain('nmcli device set wlan0 managed yes')
+    const lines = sudoLines()
+    expect(lines.some((l) => l.includes('stop livi-wifi-ap.service'))).toBe(true)
+    expect(lines.some((l) => l.includes('disable livi-wifi-ap.service'))).toBe(true)
+    expect(lines.some((l) => l.includes('--wifi-ap-teardown'))).toBe(true)
+    expect(spawnCmds()).not.toContain('pkexec')
   })
 
   test('returns the interface when the service is still active', async () => {
     mockedExists.mockReturnValue(false)
     autoClose(0) // systemctl is-active → 0
     await reconcileWifiAp(cfg())
-    expect(pkexecScript()).toContain('systemctl disable --now livi-wifi-ap.service')
+    expect(sudoLines().some((l) => l.includes('--wifi-ap-teardown'))).toBe(true)
   })
 
   test('does nothing when the interface was never taken', async () => {
@@ -264,7 +266,7 @@ describe('reconcileWifiAp — not wanted', () => {
       return proc
     })
     await reconcileWifiAp(cfg())
-    expect(pkexecScript()).toContain('systemctl disable --now livi-wifi-ap.service')
+    expect(sudoLines().some((l) => l.includes('--wifi-ap-teardown'))).toBe(true)
   })
 
   test('a wedged release is SIGKILLed after the timeout', async () => {
@@ -277,7 +279,7 @@ describe('reconcileWifiAp — not wanted', () => {
     })
     mockedSpawn.mockReturnValue(proc)
     const p = reconcileWifiAp(cfg())
-    await vi.advanceTimersByTimeAsync(12_000)
+    for (let i = 0; i < 3; i++) await vi.advanceTimersByTimeAsync(12_000)
     await p
     expect(proc.kill).toHaveBeenCalledWith('SIGKILL')
     vi.useRealTimers()
@@ -296,10 +298,13 @@ describe('reconcileWifiAp — not wanted', () => {
     expect(spawnCmds()).not.toContain('pkexec')
   })
 
-  test('releases the configured interface name', async () => {
+  test('leaves it to the helper which interface goes back', async () => {
     mockedExists.mockReturnValue(true)
+    autoClose(0)
     await reconcileWifiAp({ ...cfg(), wifiInterface: 'wlan1' } as never)
-    expect(pkexecScript()).toContain('nmcli device set wlan1 managed yes')
+    const teardown = sudoLines().find((l) => l.includes('--wifi-ap-teardown'))
+    expect(teardown).toBeDefined()
+    expect(teardown).not.toContain('wlan1')
   })
 
   test('is a no-op off linux', async () => {

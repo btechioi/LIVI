@@ -139,6 +139,12 @@ fn release_iface_from_nm(iface: &str) {
 }
 
 /// Return the interface to NetworkManager and stop the AP.
+pub fn unmanaged_iface() -> Option<String> {
+    let text = std::fs::read_to_string(NM_UNMANAGED_CONF).ok()?;
+    let name = text.split("interface-name:").nth(1)?.split([',', '\n']).next()?.trim();
+    (!name.is_empty()).then(|| name.to_string())
+}
+
 pub fn teardown(iface: &str) {
     run_cmd("pkill", &["-f", &format!("hostapd.*{HOSTAPD_CONF}")]);
     run_cmd("pkill", &["-f", &format!("dnsmasq.*{DNSMASQ_CONF}")]);

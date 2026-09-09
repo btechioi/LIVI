@@ -3,8 +3,6 @@ import { PersistedMediaFile, PersistedNavigationFile } from './types'
 
 export const APP_START_TS = Date.now()
 
-export const DEVTOOLS_IP_CANDIDATES: readonly string[] = ['192.168.43.1']
-
 export const DEFAULT_MEDIA_DATA_RESPONSE = {
   timestamp: '',
   payload: {

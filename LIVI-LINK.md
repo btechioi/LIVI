@@ -30,7 +30,7 @@ on its own: backup, install, reboot, verify. The backup is taken before anything
 
 ## Getting back to stock
 
-Open <http://192.168.50.2/>, pick the backup's `rootfs.img` under **Recovery** and press
+Open <http://10.10.10.1/>, pick the backup's `rootfs.img` under **Recovery** and press
 **Restore**. The dongle writes it and reboots into its original firmware. The red and blue LED
 alternate while it writes, do not unplug until they stop.
 
@@ -41,5 +41,5 @@ alternate while it writes, do not unplug until they stop.
 ## If something goes wrong
 
 If the dongle does not come up on USB or Wi-Fi, wait 30 seconds for it to roll back and reboot,
-then replug if it stays quiet. Logs live at <http://192.168.50.2/>: `/tmp/livi-link.log`,
+then replug if it stays quiet. Logs live at <http://10.10.10.1/>: `/tmp/livi-link.log`,
 `/tmp/l2fwd-watch.log` and `/tmp/flash.log`.

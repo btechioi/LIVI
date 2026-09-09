@@ -9,6 +9,7 @@ import { registerIpcHandle } from '@main/ipc/register'
 import { releaseFeedUrl, runNumberFromTitle } from '@main/ipc/update/feed'
 import { pickAssetForPlatform } from '@main/ipc/update/pickAsset'
 import { configEvents, saveSettings } from '@main/ipc/utils'
+import { DONGLE_AP, dongleApPresent } from '@main/services/link/dongleAp'
 import { GhRelease, runtimeStateProps } from '@main/types'
 import { currentKiosk } from '@main/window/utils'
 import type { Config } from '@shared/types'
@@ -36,7 +37,11 @@ export function registerSettingsIpc(runtimeState: runtimeStateProps) {
 
   registerIpcHandle('app:listWifiCountryCodes', () => listWifiCountryCodes())
 
-  registerIpcHandle('app:listWifiInterfaces', () => listWifiInterfaces())
+  // The dongle is no interface of this host, so it is offered next to them rather than found.
+  registerIpcHandle('app:listWifiInterfaces', async () => {
+    const local = listWifiInterfaces()
+    return (await dongleApPresent()) ? [...local, DONGLE_AP] : local
+  })
 
   registerIpcHandle('app:listBtAdapters', () => listBtAdapters())
 

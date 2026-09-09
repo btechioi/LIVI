@@ -8,7 +8,7 @@ use std::net::{Shutdown, SocketAddr, TcpStream, ToSocketAddrs};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-pub const DEFAULT_HOST: &str = "192.168.50.2";
+pub const DEFAULT_HOST: &str = "10.10.10.1";
 pub const TELNET_PORT: u16 = 2323;
 pub const PUSH_PORT: u16 = 5610;
 

@@ -1,0 +1,12 @@
+[project]
+name = "livi-telemetry-simulator"
+version = "0.1.0"
+description = "Loop simulator pushing every telemetry field LIVI accepts"
+requires-python = ">=3.10"
+dependencies = [
+    "python-socketio[client]>=5.11",
+    "websockets>=12.0",
+]
+
+[tool.uv]
+package = false

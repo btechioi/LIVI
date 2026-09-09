@@ -67,14 +67,17 @@ export function requiredPackages(entries = readManifest()): PackageEntry[] {
   return entries.filter((e) => e.section === 'core' || (lite && e.section === 'lite'))
 }
 
-/** Existence test for a path holding at most one `*`, which stands in for a single
- * directory name. Libraries sit under a multiarch directory that differs per host. */
+/** Existence test for a path with at most one `*`, which stands in for either nothing or a
+ * single directory name. Libraries sit under a Debian multiarch directory that differs per
+ * host, but distros like Arch and Fedora keep them flat (/usr/lib or /usr/lib64). */
 export function pathPresent(pattern: string): boolean {
   const star = pattern.indexOf('*')
   if (star < 0) return existsSync(pattern)
   const base = pattern.slice(0, pattern.lastIndexOf('/', star))
   const slash = pattern.indexOf('/', star)
   const rest = slash < 0 ? '' : pattern.slice(slash + 1)
+  // Arch and friends keep libraries flat in /usr/lib, no multiarch subdir.
+  if (existsSync(join(base, rest))) return true
   // Fedora keeps libraries flat in /usr/lib64.
   if (existsSync(join(`${base}64`, rest))) return true
   try {

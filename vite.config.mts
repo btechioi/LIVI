@@ -56,6 +56,19 @@ function copyAaResourcesPlugin(): Plugin {
     if (existsSync(cpIap2Src)) {
       cpSync(cpIap2Src, cpIap2Dst, { recursive: true, filter })
     }
+    // Dev: stage the compiled helper daemon next to the driver tree so the
+    // supervisor's out/main/driver fallback finds it without packaging.
+    const helperdSrc = resolve(
+      import.meta.dirname,
+      'native',
+      'livi-helperd',
+      'target',
+      'release',
+      'livi-helperd'
+    )
+    if (existsSync(helperdSrc)) {
+      cpSync(helperdSrc, resolve(driverDst, 'livi-helperd'))
+    }
   }
 
   return {

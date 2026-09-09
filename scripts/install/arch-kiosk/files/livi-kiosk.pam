@@ -1,0 +1,7 @@
+# LIVI kiosk PAM policy (Arch). pam_systemd is what hands the session its
+# XDG_RUNTIME_DIR socket namespace, which labwc/wlr-randr/Electron all need.
+auth      required  pam_permit.so
+account   required  pam_permit.so
+session   required  pam_limits.so
+session   required  pam_unix.so
+session   required  pam_systemd.so

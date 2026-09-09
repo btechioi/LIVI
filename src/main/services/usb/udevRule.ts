@@ -11,12 +11,17 @@ const TOUCH_FILTER_FILENAME = 'livi-touch-filter'
 const TOUCH_FILTER_FILE = '/usr/local/lib/livi/livi-touch-filter'
 
 function resolveAssetPath(name: string): string {
-  const resources = process.resourcesPath
-  if (typeof resources === 'string' && resources.length > 0) {
-    const packaged = path.join(resources, name)
-    if (fs.existsSync(packaged)) return packaged
+  const candidates: string[] = []
+  if (typeof process.resourcesPath === 'string' && process.resourcesPath.length > 0) {
+    candidates.push(path.join(process.resourcesPath, name))
   }
-  return path.join(__dirname, '..', '..', '..', '..', 'assets', 'linux', name)
+  // Dev and tests run with the repo root as cwd (see vite.config.mts).
+  candidates.push(path.join(process.cwd(), 'assets', 'linux', name))
+  candidates.push(path.join(__dirname, '..', '..', 'assets', 'linux', name))
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate
+  }
+  return candidates[candidates.length - 1] ?? ''
 }
 
 function resolveTemplatePath(): string {

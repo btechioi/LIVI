@@ -20,6 +20,10 @@ import type { GnssInfo } from './Gnss'
 //  HOW TO PUSH DATA
 //  ════════════════
 //
+//  Worked wiring/protocol examples for real cars (no-OBD classics included)
+//  live in docs/vehicle-data/README.md; the ESP32 reference firmware and a
+//  laptop test shim are under docs/vehicle-data/.
+//
 //  Transport options (both expect the same JSON shape):
 //
 //    Socket.IO  ws://<livi-host>:4000   event: "telemetry:push"

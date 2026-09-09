@@ -1,6 +1,10 @@
 # LIVI sudoers drop-in. Managed by LIVI. Do not edit by hand.
 # Single source of truth for helperSudoers.ts and the headless installer.
 # Lets __USERNAME__ run livi-helperd as root without a password prompt,
-# which the Bluetooth and Wi-Fi helper needs. Remove this file to revoke.
+# which the Bluetooth and Wi-Fi helper needs, and reclaim its BT/GPIO slots
+# (via a targeted pkill) from a stale helper left by a crashed session.
+# Remove this file to revoke.
 Cmnd_Alias LIVI_BT = /home/__USERNAME__/.config/LIVI/driver/livi-helperd
+Cmnd_Alias LIVI_BT_KILL = /usr/bin/pkill -f livi-helper.py$, /usr/bin/pkill -f driver/livi-helperd$
 __USERNAME__ ALL=(root) NOPASSWD: SETENV: LIVI_BT
+__USERNAME__ ALL=(root) NOPASSWD: LIVI_BT_KILL

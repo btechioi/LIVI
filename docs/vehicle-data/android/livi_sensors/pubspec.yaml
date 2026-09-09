@@ -1,0 +1,19 @@
+name: livi_sensors
+description: LIVI USB phone sensor bridge — foreground service feeding GPS/compass/accel over the wired Android Auto cable. Zero wireless.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true

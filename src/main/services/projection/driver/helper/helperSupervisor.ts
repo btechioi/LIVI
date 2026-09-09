@@ -10,15 +10,13 @@ import { loadOrCreateIdentity } from '../cp/stack/identity'
 
 const HELPER_BIN = 'livi-helperd'
 
-function isInsideAppImageMount(p: string): boolean {
-  if (process.env.APPIMAGE && p.startsWith(process.env.APPDIR ?? '')) return true
-  return p.includes('/.mount_')
-}
-
-// The AppImage FUSE mount is private to the launching user, so root cannot exec the
-// binary from there. Copy it onto a real filesystem path that root can reach.
-// Staged via temp + rename: the AP boot service runs this binary, and writing the
-// executing inode in place raises ETXTBSY — rename swaps the path atomically instead.
+// The helper runs as root (privileged Bluetooth/GPIO/usb). Root can exec a
+// binary from a real filesystem path, but not from an AppImage FUSE mount.
+// Staging every build flavour (dev, unpacked, AppImage, installed) into one
+// canonical userData path keeps the sudoers grant a single stable Cmnd_Alias.
+// Staged via temp + rename: the AP boot service runs this binary, and writing
+// the executing inode in place raises ETXTBSY — rename swaps the path
+// atomically instead.
 function stageHelperBin(src: string): string {
   const dest = join(app.getPath('userData'), 'driver', HELPER_BIN)
   const digest = (p: string): string => createHash('sha256').update(readFileSync(p)).digest('hex')
@@ -33,18 +31,22 @@ function stageHelperBin(src: string): string {
 }
 
 // A leftover helper (crashed LIVI, killed session) runs as root and keeps the
-// MFi GPIO, the RFCOMM channel and the BT sockets claimed; only root can end it.
-// The end anchor spares the AP service, which runs the same binary as --wifi-ap.
+// MFi GPIO, the RFCOMM channel and the BT sockets claimed — BlueZ then rejects
+// a fresh start with "UUID already registered" until it is gone. Only root can
+// end it.  The patterns are end-anchored so the pkill invocation (and its sudo
+// wrapper, whose own command line ends in the pattern text) never matches its
+// own command line, and the anchor spares the AP unit, which runs the same
+// binary with a --wifi-ap suffix.
+// The kill grant is part of the 99-LIVI-bt sudoers drop-in (LIVI_BT_KILL alias).
 function killStaleHelpers(): void {
   if (process.platform !== 'linux') return
-  for (const pattern of ['livi-helper\\.py', 'driver/livi-helperd$']) {
+  for (const pattern of ['livi-helper.py$', 'driver/livi-helperd$']) {
     try {
-      const out = execFileSync('pgrep', ['-f', pattern], { encoding: 'utf8' }).trim()
-      if (!out) continue
-      console.warn(`[helper] stopping a stale helper instance (${pattern})`)
+      // pkill exits 0 only when it actually signalled a match.
       execFileSync('sudo', ['-n', 'pkill', '-f', pattern], { stdio: 'ignore' })
+      console.warn(`[helper] stopped a stale helper instance (${pattern})`)
     } catch {
-      /* nothing to clean up, or no passwordless sudo for it */
+      // exit 1 = nothing stale was running; other codes = grant not installed yet.
     }
   }
 }
@@ -53,26 +55,24 @@ function resolveHelperBin(): string {
   const envBin = process.env.LIVI_HELPER_BIN
   if (envBin && existsSync(envBin)) return envBin
 
+  const staged = join(app.getPath('userData'), 'driver', HELPER_BIN)
   const resBin =
     typeof process.resourcesPath === 'string'
       ? join(process.resourcesPath, 'driver', HELPER_BIN)
       : ''
-  if (resBin && existsSync(resBin)) {
-    if (process.platform === 'linux' && isInsideAppImageMount(resBin)) {
-      try {
-        return stageHelperBin(resBin)
-      } catch (err) {
-        console.warn(`[helper] staging failed: ${(err as Error).message}`)
-        // root can never exec from the user's FUSE mount — a previously staged
-        // copy, even an older build, is the only path sudo can run.
-        const staged = join(app.getPath('userData'), 'driver', HELPER_BIN)
-        if (existsSync(staged)) return staged
-        return resBin
-      }
+  const exportBin = existsSync(resBin) ? resBin : join(__dirname, 'driver', HELPER_BIN)
+  if (existsSync(exportBin)) {
+    if (process.platform !== 'linux') return exportBin
+    try {
+      return stageHelperBin(exportBin)
+    } catch (err) {
+      console.warn(`[helper] staging failed: ${(err as Error).message}`)
+      // A previously staged copy, even an older build, is the only path sudo
+      // can run without a fresh grant — prefer it over a fallback location.
+      if (existsSync(staged)) return staged
+      return exportBin
     }
-    return resBin
   }
-
   return join(__dirname, 'driver', HELPER_BIN)
 }
 function envFromConfig(cfg: Config): NodeJS.ProcessEnv {

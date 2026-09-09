@@ -1,0 +1,5 @@
+# LIVI phone-attach hook (kiosk install only — the app-managed template keeps
+# its own version). Fires when a USB device with an Android vendor ID plugs in,
+# runs the livi-phone-attach script to set up the adb reverse tunnel and start
+# the LIVI Sensors foreground service on the phone. USB only, no wireless.
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="12d1|18d1|04e8|2717|22d9|2a70|0bb4|0fce|1004|109b|19d2|16c0|1504", ENV{DEVTYPE}=="usb_device", RUN+="/usr/local/lib/livi/livi-phone-attach.sh %k"

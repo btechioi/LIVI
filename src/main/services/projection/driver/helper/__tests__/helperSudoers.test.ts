@@ -28,7 +28,7 @@ const mockedWrite = writeFileSync as Mock
 const mockedDialog = dialog.showMessageBox as Mock
 
 const TEMPLATE = 'Cmnd_Alias LIVI_BT = */livi-helperd\n__USERNAME__ ALL=(root) NOPASSWD: LIVI_BT\n'
-const SENTINEL = '/tmp/bt-sudoers-v2.installed'
+const SENTINEL = '/tmp/bt-sudoers-v3.installed'
 const win = {} as never
 
 function makeProc(): EventEmitter {
@@ -83,11 +83,25 @@ async function install(): Promise<string> {
 }
 
 describe('helperSudoersExists', () => {
-  test('true when sudo -n -l lists the alias or the helper', () => {
-    mockedExec.mockReturnValueOnce('(root) SETENV: NOPASSWD: /opt/livi/driver/livi-helperd')
+  test('true when sudo -n -l lists the helper and the stale-helper kill grant', () => {
+    mockedExec.mockReturnValueOnce(
+      '(root) SETENV: NOPASSWD: /opt/livi/driver/livi-helperd\n' +
+        '(root) NOPASSWD: /usr/bin/pkill -f driver/livi-helperd$'
+    )
     expect(helperSudoersExists()).toBe(true)
-    mockedExec.mockReturnValueOnce('(root) NOPASSWD: /opt/livi/driver/livi-helperd')
+    mockedExec.mockReturnValueOnce(
+      '(root) NOPASSWD: /opt/livi/driver/livi-helperd\n' +
+        '(root) NOPASSWD: /usr/bin/pkill -f livi-helper.py$'
+    )
     expect(helperSudoersExists()).toBe(true)
+  })
+
+  test('false when the helper rule is present but the kill grant is missing', () => {
+    mockedExec.mockReturnValueOnce(
+      '(root) SETENV: NOPASSWD: /opt/livi/driver/livi-helperd\n' +
+        '(root) NOPASSWD: /usr/bin/systemctl start ap'
+    )
+    expect(helperSudoersExists()).toBe(false)
   })
 
   test('a python-era rule does not count, so an updated install gets the new one', () => {
@@ -128,7 +142,7 @@ describe('checkAndInstallHelperSudoers', () => {
   })
 
   test('skips when the rule is already active', async () => {
-    mockedExec.mockReturnValue('livi-helperd')
+    mockedExec.mockReturnValue('livi-helperd\n/usr/bin/pkill -f driver/livi-helperd$')
     await checkAndInstallHelperSudoers(win)
     expect(mockedDialog).not.toHaveBeenCalled()
   })

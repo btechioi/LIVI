@@ -1,0 +1,26 @@
+[Unit]
+Description=LIVI kiosk (labwc multi-screen)
+After=systemd-user-sessions.service seatd.service getty@tty1.service
+Wants=seatd.service
+Conflicts=getty@tty1.service
+
+[Service]
+Type=simple
+User=__LIVI_USER__
+PAMName=livi-kiosk
+WorkingDirectory=/opt/livi-kiosk
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+StandardInput=tty-fail
+StandardOutput=journal
+StandardError=inherit
+Environment=ELECTRON_OZONE_PLATFORM_HINT=wayland
+Environment=LIVI_KIOSK=1
+ExecStart=/opt/livi-kiosk/livi-kiosk-session.sh
+ExecStopPost=+/usr/bin/systemctl --no-block start getty@tty1.service
+Restart=no
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

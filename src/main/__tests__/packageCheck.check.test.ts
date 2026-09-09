@@ -122,6 +122,11 @@ describe('pathPresent', () => {
     expect(pathPresent('/usr/lib/*/libva.so.2')).toBe(true)
   })
 
+  test('finds a library flat in /usr/lib when there is no lib64 symlink', () => {
+    mockedExists.mockImplementation((p: string) => String(p) === '/usr/lib/libva.so.2')
+    expect(pathPresent('/usr/lib/*/libva.so.2')).toBe(true)
+  })
+
   test('handles a trailing * without a rest path', () => {
     mockedReaddir.mockReturnValue(['some-dir'])
     mockedExists.mockImplementation((p: string) => String(p) === '/opt/livi/some-dir')

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LIVI Phone Sensors</title>
+<style>
+  :root { --ok: #16a34a; --err: #dc2626; font-family: system-ui, sans-serif; }
+  * { margin:0; box-sizing:border-box; }
+  body { background:#0a0a0a; color:#eee; padding:1.2rem; display:flex; flex-direction:column; gap:1rem; min-height:100dvh; }
+  h1 { font-size:1.1rem; font-weight:600; color:#aaa; }
+  .row { display:flex; align-items:center; gap:.6rem; }
+  .dot { width:10px; height:10px; border-radius:50%; }
+  .dot.ok  { background:var(--ok); box-shadow:0 0 6px var(--ok); }
+  .dot.err { background:var(--err); box-shadow:0 0 6px var(--err); }
+  #startBtn {
+    width:100%; padding:1rem; font-size:1.1rem; font-weight:600; border:none;
+    border-radius:10px; cursor:pointer; background:var(--ok); color:#fff;
+    transition:opacity .2s;
+  }
+  #startBtn:disabled { opacity:.4; cursor:default; }
+  #stats { display:grid; grid-template-columns:1fr 1fr; gap:.4rem 1rem; font-size:.85rem; color:#aaa; }
+  #stats .v { color:#eee; font-variant-numeric:tabular-nums; }
+  footer { margin-top:auto; font-size:.72rem; color:#555; text-align:center; }
+</style>
+</head>
+<body>
+  <div class="row"><div class="dot err" id="dot"></div><h1>LIVI Phone Sensors</h1></div>
+
+  <button id="startBtn" onclick="start()">Start sensors</button>
+
+  <div id="stats" style="display:none">
+    <div>GPS fix</div>    <div class="v" id="sGps">—</div>
+    <div>Compass</div>    <div class="v" id="sMag">—</div>
+    <div>Accel fwd</div>  <div class="v" id="sAccel">—</div>
+    <div>Sent /s</div>    <div class="v" id="sRate">—</div>
+  </div>
+
+  <footer>Open on phone via <code>adb reverse</code> · all traffic stays on USB</footer>
+
+<script>
+let ws = null, sendCount = 0, lastRate = 0;
+const $ = id => document.getElementById(id);
+
+function start() {
+  $('startBtn').disabled = true;
+  initWs();
+  initGps();
+  requestSensorPermissions();
+}
+
+/* ── WebSocket ─────────────────────────────────────────────────────────────── */
+function initWs() {
+  const wsUrl = 'ws://' + location.hostname + ':' + location.port + '/ws';
+  ws = new WebSocket(wsUrl);
+  ws.onopen = () => { $('dot').className = 'dot ok'; };
+  ws.onclose = ws.onerror = () => {
+    $('dot').className = 'dot err';
+    setTimeout(initWs, 1500);
+  };
+}
+
+function send(obj) {
+  if (ws && ws.readyState === 1) { ws.send(JSON.stringify(obj)); sendCount++; }
+}
+
+/* ── GPS via Geolocation ───────────────────────────────────────────────────── */
+function initGps() {
+  $('stats').style.display = 'grid';
+  navigator.geolocation.watchPosition(pos => {
+    const c = pos.coords;
+    send({ sensor:'gps', lat:c.latitude, lng:c.longitude, alt:c.altitude ?? 0,
+           accuracy:c.accuracy, speed:c.speed ?? 0, heading:c.heading ?? 0,
+           satellites:0 });
+    $('sGps').textContent = c.latitude.toFixed(5) + ', ' + c.longitude.toFixed(5);
+  }, () => {}, { enableHighAccuracy:true, maximumAge:500 });
+
+  setInterval(() => {
+    $('sRate').textContent = sendCount + ' msg';
+    lastRate = sendCount; sendCount = 0;
+  }, 1000);
+}
+
+/* ── Compass + Accelerometer (requires user gesture) ───────────────────────── */
+async function requestSensorPermissions() {
+  // iOS requires explicit request; Android Chrome >= 134 requires it too.
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+      await DeviceOrientationEvent.requestPermission();
+    }
+  } catch(e) { console.warn('orientation permission denied', e); }
+
+  try {
+    if (typeof DeviceMotionEvent !== 'undefined' &&
+        typeof DeviceMotionEvent.requestPermission === 'function') {
+      await DeviceMotionEvent.requestPermission();
+    }
+  } catch(e) { console.warn('motion permission denied', e); }
+
+  /* Compass — DeviceOrientation(absolute) / iOS webkitCompassHeading */
+  let lastMag = 0;
+  const compass = e => {
+    if (performance.now() - lastMag < 90) return;
+    lastMag = performance.now();
+    let hdg = null;
+    if (e.webkitCompassHeading !== undefined) {
+      hdg = e.webkitCompassHeading;                       // iOS
+    } else if (e.absolute && e.alpha !== null) {
+      hdg = (360 - e.alpha) % 360;                        // Android (magnetometer)
+    } else if (e.alpha !== null) {
+      hdg = (360 - e.alpha) % 360;                        // fallback: gyro-relative
+    }
+    if (hdg !== null) {
+      send({ sensor:'mag', heading: hdg });
+      $('sMag').textContent = hdg.toFixed(1) + '°';
+    }
+  };
+  // absolute gives magnetometer heading on Android; plain orientation covers
+  // iOS's webkitCompassHeading and any device without an absolute source.
+  window.addEventListener('deviceorientationabsolute', compass, true);
+  window.addEventListener('deviceorientation', compass, true);
+
+  /* Accelerometer — DeviceMotionEvent */
+  let lastAcc = 0;
+  window.addEventListener('devicemotion', e => {
+    if (performance.now() - lastAcc < 80) return;
+    lastAcc = performance.now();
+    const a = e.accelerationIncludingGravity;
+    if (!a) return;
+    // Device axes: x=right, y=forward (landscape assumed), z=up
+    send({ sensor:'accel', forward:a.y ?? 0, lateral:a.x ?? 0, up:a.z ?? 0 });
+    $('sAccel').textContent = ((a.y ?? 0)*9.81).toFixed(1) + ' m/s²';
+  });
+}
+</script>
+</body>
+</html>

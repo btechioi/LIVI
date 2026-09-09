@@ -3,7 +3,7 @@
 # Format: <section>|<package>|<probe>|<purpose>|<fedora-package>
 #   <package>        Debian name (apt)
 #   <fedora-package> Fedora name (dnf); may be empty or repeat, deduped before install
-#   <probe>          cmd:<bin> | gst:<element> | file:<path> (one * for a dir, also /usr/lib64)
+#   <probe>          cmd:<bin> | gst:<element> | file:<path> (one * for a dir, also flat /usr/lib and /usr/lib64)
 #
 # Sections: core = every host; lite = host with no desktop session
 

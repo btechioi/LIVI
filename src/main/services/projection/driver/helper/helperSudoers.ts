@@ -6,7 +6,7 @@ import { app, BrowserWindow, dialog } from 'electron'
 
 const RULE_FILE = '/etc/sudoers.d/99-LIVI-bt'
 const TEMPLATE_FILENAME = '99-LIVI-bt.sudoers.template'
-const SENTINEL_VERSION = 'v2'
+const SENTINEL_VERSION = 'v3'
 function sentinelPath(): string {
   return join(app.getPath('userData'), `bt-sudoers-${SENTINEL_VERSION}.installed`)
 }
@@ -44,8 +44,12 @@ function ruleActiveInSudo(): boolean {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore']
     })
-    // Only a rule naming the helper binary counts; an older python-era rule does not.
-    return out.includes('livi-helperd') || /\(ALL(\s*:\s*ALL)?\)\s+NOPASSWD:\s+ALL/.test(out)
+    // A rule counts only if it names the helper binary AND the stale-helper
+    // kill grant; an older python-era rule (or one without pkill) must not.
+    return (
+      (out.includes('livi-helperd') && /pkill/.test(out)) ||
+      /\(ALL(\s*:\s*ALL)?\)\s+NOPASSWD:\s+ALL/.test(out)
+    )
   } catch {
     return false
   }

@@ -143,13 +143,12 @@ describe('spawning', () => {
   test('kills stale helpers (python-era and rust) before spawning, sparing the AP unit', async () => {
     devBinOnly()
     const mockedExec = execFileSync as Mock
-    mockedExec.mockReturnValue('1234\n')
+    mockedExec.mockReturnValue('')
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { HelperSupervisor } = await load(false)
     const sup = new HelperSupervisor()
     sup.start(CONFIG)
-    for (const pattern of ['livi-helper\\.py', 'driver/livi-helperd$']) {
-      expect(mockedExec).toHaveBeenCalledWith('pgrep', ['-f', pattern], expect.anything())
+    for (const pattern of ['livi-helper.py$', 'driver/livi-helperd$']) {
       expect(mockedExec).toHaveBeenCalledWith('sudo', ['-n', 'pkill', '-f', pattern], {
         stdio: 'ignore'
       })
@@ -221,12 +220,22 @@ describe('spawning', () => {
 })
 
 describe('helper root resolution', () => {
-  test('prefers the packaged resources outside an AppImage mount', async () => {
+  test('stages every packaged copy into the canonical userData path so one sudoers rule covers all builds', async () => {
     ;(process as { resourcesPath?: string }).resourcesPath = '/res'
-    mockedExists.mockImplementation((p: string) => String(p).startsWith('/res'))
+    fakeFs(['/res/driver/livi-helperd'])
     const { HelperSupervisor } = await load(false)
     new HelperSupervisor().start(CONFIG)
-    expect(mockedSpawn.mock.calls[0][2].cwd).toBe('/res/driver')
+    expect(mockedCopy).toHaveBeenCalledWith(
+      '/res/driver/livi-helperd',
+      '/data/driver/livi-helperd.new'
+    )
+    expect(mockedChmod).toHaveBeenCalledWith('/data/driver/livi-helperd.new', 0o755)
+    expect(mockedRename).toHaveBeenCalledWith(
+      '/data/driver/livi-helperd.new',
+      '/data/driver/livi-helperd'
+    )
+    expect(String(mockedSpawn.mock.calls[0][1][2])).toBe('/data/driver/livi-helperd')
+    expect(mockedSpawn.mock.calls[0][2].cwd).toBe('/data/driver')
   })
 
   test('stages the binary out of an AppImage mount so root can exec it, and reuses it', async () => {
@@ -409,7 +418,7 @@ describe('io and lifecycle', () => {
     sup.on('error', onError)
     child.emit('error', new Error('EACCES'))
     expect(onError).toHaveBeenCalledWith(expect.any(Error))
-    expect(warnSpy).not.toHaveBeenCalled()
+    expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('child error'))
     warnSpy.mockRestore()
   })
 

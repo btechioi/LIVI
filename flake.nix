@@ -85,6 +85,8 @@
         ANDROID_SDK_ROOT = "${androidSdk}/libexec/android-sdk";
 
         shellHook = ''
+          export PATH="${pkgs.pnpm}/bin:${pkgs.nodejs_24}/bin:$PATH"
+
           export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/tools/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$PATH"
 
           export PKG_CONFIG_PATH="${pkgs.gst_all_1.gstreamer.dev}/lib/pkgconfig:${pkgs.gst_all_1.gst-plugins-base.dev}/lib/pkgconfig:$PKG_CONFIG_PATH"
